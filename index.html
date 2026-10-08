@@ -15,7 +15,7 @@
     <!-- Header -->
     <header class="text-center space-y-2">
       <h1 class="text-3xl font-bold text-slate-900">🚗 คำนวณหารค่าใช้จ่ายทริป</h1>
-      <p class="text-slate-500 text-sm">จัดการค่าใช้จ่าย แก้ไขรายการ และแชร์กรอกข้อมูลร่วมกันแบบ Real-time</p>
+      <p class="text-slate-500 text-sm">จัดการค่าใช้จ่าย แก้ไขรายการ และแชร์กรอกข้อมูลร่วมกันแบบ Real-time (บันทึกข้อมูลอัตโนมัติ)</p>
     </header>
 
     <!-- แถบสถานะห้อง (เชื่อมต่อให้อัตโนมัติ) -->
@@ -24,7 +24,7 @@
         <span class="text-lg">🌐</span>
         <div>
           <h2 class="font-bold text-sm">สถานะห้องออนไลน์: <span id="currentRoomText" class="text-amber-300 font-mono">กำลังเชื่อมต่อ...</span></h2>
-          <p class="text-xs text-blue-100">ทุกคนที่เปิดลิงก์นี้จะเห็นข้อมูลอัปเดตตรงกันทันที</p>
+          <p class="text-xs text-blue-100">บันทึกข้อมูลลงเครื่องอัตโนมัติ กดรีเฟรชข้อมูลไม่หาย</p>
         </div>
       </div>
       <div class="flex gap-2 w-full sm:w-auto">
@@ -178,7 +178,7 @@
     let currentRoomId = null;
     let members = [];
     let expenses = [];
-    let editingId = null; // เก็บ ID เมื่ออยู่ในโหมดแก้ไข
+    let editingId = null;
 
     try {
       if (!firebase.apps.length) {
@@ -186,14 +186,36 @@
       }
       db = firebase.database();
     } catch (e) {
-      console.warn("Firebase โหมดออฟไลน์ใช้งานในเครื่อง", e);
+      console.warn("Firebase offline mode", e);
     }
 
-    // เริ่มต้นเชื่อมต่อห้องอัตโนมัติเมื่อเปิดเว็บ
+    // ฟังก์ชันช่วยบันทึกลงเครื่อง (LocalStorage)
+    function saveLocal() {
+      try {
+        if (!currentRoomId) return;
+        localStorage.setItem('trip_data_' + currentRoomId, JSON.stringify({ members, expenses }));
+      } catch (e) { console.error(e); }
+    }
+
+    // ฟังก์ชันช่วยโหลดจากเครื่อง (LocalStorage)
+    function loadLocal() {
+      try {
+        if (!currentRoomId) return false;
+        const localData = localStorage.getItem('trip_data_' + currentRoomId);
+        if (localData) {
+          const parsed = JSON.parse(localData);
+          members = parsed.members || [];
+          expenses = parsed.expenses || [];
+          return true;
+        }
+      } catch (e) { console.error(e); }
+      return false;
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       const urlParams = new URLSearchParams(window.location.search);
       const roomFromUrl = urlParams.get('room');
-      const defaultRoom = roomFromUrl || 'TRIP2026'; // ตั้งชื่อห้องเริ่มต้นไว้
+      const defaultRoom = roomFromUrl || 'TRIP2026';
       document.getElementById('roomIdInput').value = defaultRoom;
       connectRoom(defaultRoom);
     });
@@ -207,24 +229,30 @@
       currentRoomId = roomId;
       document.getElementById('currentRoomText').innerText = currentRoomId;
       
+      // 1. โหลดข้อมูลจากเครื่องก่อนทันที ป้องกันหน้าโล่งเมื่อกดรีเฟรช
+      loadLocal();
+      renderMembers();
+      renderExpenses();
+      calculateSettlement();
+
+      // 2. ดึง/ซิงค์ข้อมูลจากออนไลน์เพิ่มเติม
       if (db) {
         db.ref('trips/' + currentRoomId).on('value', (snapshot) => {
           const data = snapshot.val();
-          if (data) {
+          if (data && (data.members || data.expenses)) {
             members = data.members || [];
             expenses = data.expenses || [];
-          } else {
-            members = [];
-            expenses = [];
+            saveLocal();
+            renderMembers();
+            renderExpenses();
+            calculateSettlement();
           }
-          renderMembers();
-          renderExpenses();
-          calculateSettlement();
         });
       }
     }
 
     function syncData() {
+      saveLocal(); // บันทึกลง LocalStorage ทุกครั้งที่มีการเปลี่ยนแปลง
       if (currentRoomId && db) {
         db.ref('trips/' + currentRoomId).set({
           members: members,
@@ -321,7 +349,6 @@
       checkboxes.forEach(cb => cb.checked = master.checked);
     }
 
-    // บันทึก หรือ อัปเดต ค่าใช้จ่ายทั่วไป
     function saveExpense() {
       const title = document.getElementById('titleInput').value.trim();
       const amount = parseFloat(document.getElementById('amountInput').value);
@@ -368,7 +395,6 @@
       syncData();
     }
 
-    // บันทึก หรือ อัปเดต ส่วนลดอิสระ
     function saveStandaloneDiscount() {
       const title = document.getElementById('discTitleInput').value.trim();
       const amount = parseFloat(document.getElementById('discAmountInput').value);
@@ -408,7 +434,6 @@
       syncData();
     }
 
-    // โหลดข้อมูลมาแก้ไข
     function editExpense(id) {
       const exp = expenses.find(e => e.id === id);
       if (!exp) return;
@@ -447,19 +472,16 @@
       document.getElementById('formSection').scrollIntoView({ behavior: 'smooth' });
     }
 
-    // ยกเลิกการแก้ไข Reset ฟอร์ม
     function cancelEdit() {
       editingId = null;
       document.getElementById('formHeaderTitle').innerText = '2. บันทึกข้อมูล';
 
-      // Reset Inputs
       document.getElementById('titleInput').value = '';
       document.getElementById('amountInput').value = '';
       document.getElementById('discountInput').value = '';
       document.getElementById('discTitleInput').value = '';
       document.getElementById('discAmountInput').value = '';
 
-      // Reset Buttons
       document.getElementById('saveExpenseBtn').innerText = 'บันทึกรายการ';
       document.getElementById('saveDiscountBtn').innerText = 'บันทึกส่วนลดอิสระ';
       document.getElementById('cancelEditExpenseBtn').classList.add('hidden');
