@@ -15,24 +15,21 @@
     <!-- Header -->
     <header class="text-center space-y-2">
       <h1 class="text-3xl font-bold text-slate-900">🚗 คำนวณหารค่าใช้จ่ายทริป</h1>
-      <p class="text-slate-500 text-sm">จัดการค่าใช้จ่าย เพิ่มส่วนลดอิสระ เลือกคนหารเจาะจง และแชร์ห้องกรอกข้อมูลร่วมกันได้</p>
+      <p class="text-slate-500 text-sm">จัดการค่าใช้จ่าย แก้ไขรายการ และแชร์กรอกข้อมูลร่วมกันแบบ Real-time</p>
     </header>
 
-    <!-- ระบบสร้าง/เข้าร่วมห้องทริป (Room Code) -->
-    <section class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-5 rounded-2xl shadow-md space-y-3">
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+    <!-- แถบสถานะห้อง (เชื่อมต่อให้อัตโนมัติ) -->
+    <section class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-2xl shadow-md flex flex-col sm:flex-row justify-between items-center gap-3">
+      <div class="flex items-center gap-2">
+        <span class="text-lg">🌐</span>
         <div>
-          <h2 class="font-bold text-lg">🌐 ระบบแชร์ห้องกรอกข้อมูลร่วมกัน</h2>
-          <p class="text-xs text-blue-100">ใส่ Room Code เดียวกับเพื่อน เพื่อเข้าถึงและกรอกข้อมูลพร้อมกันแบบ Real-time</p>
-        </div>
-        <div class="flex gap-2 w-full md:w-auto">
-          <input id="roomIdInput" type="text" placeholder="ระบุ Room Code (เช่น TRIP2026)" class="px-3 py-2 rounded-xl text-slate-800 text-sm focus:outline-none flex-1 md:w-56 font-mono font-bold uppercase">
-          <button onclick="joinRoom()" class="bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold px-4 py-2 rounded-xl text-sm transition">เชื่อมต่อห้อง</button>
+          <h2 class="font-bold text-sm">สถานะห้องออนไลน์: <span id="currentRoomText" class="text-amber-300 font-mono">กำลังเชื่อมต่อ...</span></h2>
+          <p class="text-xs text-blue-100">ทุกคนที่เปิดลิงก์นี้จะเห็นข้อมูลอัปเดตตรงกันทันที</p>
         </div>
       </div>
-      <div id="roomStatus" class="text-xs bg-white/10 px-3 py-1.5 rounded-lg flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-amber-300 animate-pulse"></span>
-        <span>สถานะ: โหมดใช้งานออฟไลน์ในเครื่อง (ยังไม่ได้เชื่อมต่อห้องออนไลน์)</span>
+      <div class="flex gap-2 w-full sm:w-auto">
+        <input id="roomIdInput" type="text" placeholder="เปลี่ยนชื่อห้อง..." class="px-3 py-1.5 rounded-xl text-slate-800 text-xs focus:outline-none w-36 font-mono font-bold uppercase">
+        <button onclick="changeRoomManual()" class="bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">ย้ายห้อง</button>
       </div>
     </section>
 
@@ -46,15 +43,15 @@
       <div id="membersList" class="flex flex-wrap gap-2"></div>
     </section>
 
-    <!-- 2. เพิ่มรายการค่าใช้จ่าย / ส่วนลดอิสระ -->
-    <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+    <!-- 2. เพิ่ม/แก้ไข รายการค่าใช้จ่าย & ส่วนลด -->
+    <section id="formSection" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
-        <h2 class="text-lg font-semibold text-slate-800">2. บันทึกข้อมูล</h2>
+        <h2 id="formHeaderTitle" class="text-lg font-semibold text-slate-800">2. บันทึกข้อมูล</h2>
         
         <!-- Tab เลือกประเภทการบันทึก -->
         <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-medium">
           <button id="tabExpenseBtn" onclick="switchFormMode('expense')" class="px-3 py-1.5 rounded-lg bg-white shadow-sm text-blue-600 font-bold transition">💳 ค่าใช้จ่ายทั่วไป</button>
-          <button id="tabDiscountBtn" onclick="switchFormMode('discount')" class="px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 transition">🎁 ส่วนลดอิสระ (ไม่ผูกกับบิล)</button>
+          <button id="tabDiscountBtn" onclick="switchFormMode('discount')" class="px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 transition">🎁 ส่วนลดอิสระ</button>
         </div>
       </div>
       
@@ -93,19 +90,22 @@
           </div>
         </div>
 
-        <button onclick="addExpense()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-medium transition shadow-sm">บันทึกค่าใช้จ่าย</button>
+        <div class="flex gap-2">
+          <button id="saveExpenseBtn" onclick="saveExpense()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-medium transition shadow-sm">บันทึกรายการ</button>
+          <button id="cancelEditExpenseBtn" onclick="cancelEdit()" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium transition">ยกเลิก</button>
+        </div>
       </div>
 
       <!-- ฟอร์มส่วนลดอิสระ -->
       <div id="discountFormBlock" class="space-y-4 hidden">
         <div class="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800">
-          💡 <b>ส่วนลดอิสระ:</b> สำหรับคูปองส่วนลดกลาง, แคชแบ็กบัตรเครดิต หรือส่วนลดเฉพาะบุคคล โดยระบบจะนำไปลดภาระค่าใช้จ่ายให้ผู้ที่มีสิทธิ์ได้รับส่วนลดโดยตรง
+          💡 <b>ส่วนลดอิสระ:</b> ใช้สำหรับคูปองกลาง หรือส่วนลดเฉพาะบุคคล โดยระบบจะนำไปลดภาระค่าใช้จ่ายให้คนที่ได้รับส่วนลดโดยตรง
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อส่วนลด / สิทธิ์พิเศษ</label>
-            <input id="discTitleInput" type="text" placeholder="เช่น คูปอง Agoda, แคชแบ็กบัตรเครดิต, ส่วนลดนักศึกษา" class="w-full px-4 py-2 border rounded-xl text-sm border-slate-200">
+            <input id="discTitleInput" type="text" placeholder="เช่น คูปอง Agoda, แคชแบ็ก, ส่วนลดนักศึกษา" class="w-full px-4 py-2 border rounded-xl text-sm border-slate-200">
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-500 mb-1">มูลค่าส่วนลด (บาท)</label>
@@ -115,7 +115,7 @@
 
         <div>
           <div class="flex justify-between items-center mb-2">
-            <label class="block text-xs font-medium text-slate-500">คนที่มีสิทธิ์ได้รับส่วนลดนี้ (ลดเงินที่ต้องจ่ายลง):</label>
+            <label class="block text-xs font-medium text-slate-500">คนที่มีสิทธิ์ได้รับส่วนลดนี้:</label>
             <label class="inline-flex items-center text-xs text-emerald-600 cursor-pointer font-medium">
               <input type="checkbox" id="selectAllDiscCheckbox" onchange="toggleSelectAll(this, 'disc-beneficiary-checkbox')" class="mr-1 rounded text-emerald-600"> เลือกทุกคน
             </label>
@@ -125,11 +125,14 @@
           </div>
         </div>
 
-        <button onclick="addStandaloneDiscount()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-sm font-medium transition shadow-sm">บันทึกส่วนลดอิสระ</button>
+        <div class="flex gap-2">
+          <button id="saveDiscountBtn" onclick="saveStandaloneDiscount()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-sm font-medium transition shadow-sm">บันทึกส่วนลดอิสระ</button>
+          <button id="cancelEditDiscountBtn" onclick="cancelEdit()" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium transition">ยกเลิก</button>
+        </div>
       </div>
     </section>
 
-    <!-- 3. ตารางรายการค่าใช้จ่าย & ส่วนลด -->
+    <!-- 3. ตารางรายการค่าใช้จ่าย -->
     <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
       <div class="flex justify-between items-center mb-3">
         <h2 class="text-lg font-semibold text-slate-800">3. รายการที่บันทึกแล้ว</h2>
@@ -143,7 +146,7 @@
               <th class="py-2.5 px-3">รายการ</th>
               <th class="py-2.5 px-3">ประเภท</th>
               <th class="py-2.5 px-3">จำนวนเงิน/ส่วนลด</th>
-              <th class="py-2.5 px-3">คนจ่าย / ผู้ให้สิทธิ์</th>
+              <th class="py-2.5 px-3">คนจ่าย</th>
               <th class="py-2.5 px-3">คนหาร / ผู้ได้ส่วนลด</th>
               <th class="py-2.5 px-3 text-right">จัดการ</th>
             </tr>
@@ -174,7 +177,8 @@
     let db = null;
     let currentRoomId = null;
     let members = [];
-    let expenses = []; // รองรับทั้งประเภท 'expense' และ 'standalone_discount'
+    let expenses = [];
+    let editingId = null; // เก็บ ID เมื่ออยู่ในโหมดแก้ไข
 
     try {
       if (!firebase.apps.length) {
@@ -183,6 +187,50 @@
       db = firebase.database();
     } catch (e) {
       console.warn("Firebase โหมดออฟไลน์ใช้งานในเครื่อง", e);
+    }
+
+    // เริ่มต้นเชื่อมต่อห้องอัตโนมัติเมื่อเปิดเว็บ
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomFromUrl = urlParams.get('room');
+      const defaultRoom = roomFromUrl || 'TRIP2026'; // ตั้งชื่อห้องเริ่มต้นไว้
+      document.getElementById('roomIdInput').value = defaultRoom;
+      connectRoom(defaultRoom);
+    });
+
+    function changeRoomManual() {
+      const roomInput = document.getElementById('roomIdInput').value.trim().toUpperCase();
+      if (roomInput) connectRoom(roomInput);
+    }
+
+    function connectRoom(roomId) {
+      currentRoomId = roomId;
+      document.getElementById('currentRoomText').innerText = currentRoomId;
+      
+      if (db) {
+        db.ref('trips/' + currentRoomId).on('value', (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            members = data.members || [];
+            expenses = data.expenses || [];
+          } else {
+            members = [];
+            expenses = [];
+          }
+          renderMembers();
+          renderExpenses();
+          calculateSettlement();
+        });
+      }
+    }
+
+    function syncData() {
+      if (currentRoomId && db) {
+        db.ref('trips/' + currentRoomId).set({
+          members: members,
+          expenses: expenses
+        });
+      }
     }
 
     function switchFormMode(mode) {
@@ -201,46 +249,6 @@
         discBlock.classList.remove('hidden');
         discBtn.className = "px-3 py-1.5 rounded-lg bg-white shadow-sm text-emerald-600 font-bold transition";
         expBtn.className = "px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 transition";
-      }
-    }
-
-    function joinRoom() {
-      const roomInput = document.getElementById('roomIdInput').value.trim().toUpperCase();
-      if (!roomInput) {
-        alert('กรุณากรอก Room Code ที่ต้องการเข้า');
-        return;
-      }
-
-      currentRoomId = roomInput;
-      const statusDiv = document.getElementById('roomStatus');
-      
-      if (db) {
-        statusDiv.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>เชื่อมต่อกับห้องออนไลน์: <b>${currentRoomId}</b> (Real-time Sync)</span>`;
-        
-        db.ref('trips/' + currentRoomId).on('value', (snapshot) => {
-          const data = snapshot.val();
-          if (data) {
-            members = data.members || [];
-            expenses = data.expenses || [];
-          } else {
-            members = [];
-            expenses = [];
-          }
-          renderMembers();
-          renderExpenses();
-          calculateSettlement();
-        });
-      } else {
-        statusDiv.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-400"></span><span>ใช้งานห้องออฟไลน์: <b>${currentRoomId}</b></span>`;
-      }
-    }
-
-    function syncData() {
-      if (currentRoomId && db) {
-        db.ref('trips/' + currentRoomId).set({
-          members: members,
-          expenses: expenses
-        });
       }
     }
 
@@ -313,8 +321,8 @@
       checkboxes.forEach(cb => cb.checked = master.checked);
     }
 
-    // เพิ่มค่าใช้จ่ายทั่วไป
-    function addExpense() {
+    // บันทึก หรือ อัปเดต ค่าใช้จ่ายทั่วไป
+    function saveExpense() {
       const title = document.getElementById('titleInput').value.trim();
       const amount = parseFloat(document.getElementById('amountInput').value);
       const discount = parseFloat(document.getElementById('discountInput').value) || 0;
@@ -327,19 +335,17 @@
         alert('กรุณากรอกรายการ จำนวนเงิน และเลือกคนจ่ายให้ถูกต้อง');
         return;
       }
-
       if (discount >= amount) {
         alert('ส่วนลดต้องน้อยกว่ายอดเต็ม');
         return;
       }
-
       if (participants.length === 0) {
         alert('กรุณาเลือกผู้ร่วมหารอย่างน้อย 1 คน');
         return;
       }
 
-      expenses.push({
-        id: Date.now(),
+      const itemData = {
+        id: editingId ? editingId : Date.now(),
         type: 'expense',
         title,
         amount,
@@ -347,19 +353,23 @@
         netAmount: amount - discount,
         payer,
         participants
-      });
+      };
 
-      document.getElementById('titleInput').value = '';
-      document.getElementById('amountInput').value = '';
-      document.getElementById('discountInput').value = '';
-      
+      if (editingId) {
+        const index = expenses.findIndex(e => e.id === editingId);
+        if (index !== -1) expenses[index] = itemData;
+      } else {
+        expenses.push(itemData);
+      }
+
+      cancelEdit();
       renderExpenses();
       calculateSettlement();
       syncData();
     }
 
-    // เพิ่มส่วนลดอิสระ
-    function addStandaloneDiscount() {
+    // บันทึก หรือ อัปเดต ส่วนลดอิสระ
+    function saveStandaloneDiscount() {
       const title = document.getElementById('discTitleInput').value.trim();
       const amount = parseFloat(document.getElementById('discAmountInput').value);
 
@@ -367,35 +377,98 @@
       const beneficiaries = Array.from(checkedBoxes).map(cb => cb.value);
 
       if (!title || isNaN(amount) || amount <= 0) {
-        alert('กรุณากรอกชื่อส่วนลดและจำนวนเงินส่วนลดให้ถูกต้อง');
+        alert('กรุณากรอกชื่อส่วนลดและจำนวนเงินให้ถูกต้อง');
         return;
       }
-
       if (beneficiaries.length === 0) {
         alert('กรุณาเลือกคนที่มีสิทธิ์ได้รับส่วนลดอย่างน้อย 1 คน');
         return;
       }
 
-      expenses.push({
-        id: Date.now(),
+      const itemData = {
+        id: editingId ? editingId : Date.now(),
         type: 'standalone_discount',
         title,
         amount: amount,
         netAmount: -amount,
-        payer: 'สิทธิ์ส่วนลดกลาง',
+        payer: 'ส่วนลดกลาง',
         participants: beneficiaries
-      });
+      };
 
-      document.getElementById('discTitleInput').value = '';
-      document.getElementById('discAmountInput').value = '';
+      if (editingId) {
+        const index = expenses.findIndex(e => e.id === editingId);
+        if (index !== -1) expenses[index] = itemData;
+      } else {
+        expenses.push(itemData);
+      }
 
+      cancelEdit();
       renderExpenses();
       calculateSettlement();
       syncData();
     }
 
+    // โหลดข้อมูลมาแก้ไข
+    function editExpense(id) {
+      const exp = expenses.find(e => e.id === id);
+      if (!exp) return;
+
+      editingId = id;
+      document.getElementById('formHeaderTitle').innerText = '✏️ แก้ไขรายการ';
+
+      if (exp.type === 'standalone_discount') {
+        switchFormMode('discount');
+        document.getElementById('discTitleInput').value = exp.title;
+        document.getElementById('discAmountInput').value = exp.amount;
+
+        const checkboxes = document.querySelectorAll('.disc-beneficiary-checkbox');
+        checkboxes.forEach(cb => {
+          cb.checked = exp.participants.includes(cb.value);
+        });
+
+        document.getElementById('saveDiscountBtn').innerText = 'อัปเดตส่วนลดอิสระ';
+        document.getElementById('cancelEditDiscountBtn').classList.remove('hidden');
+      } else {
+        switchFormMode('expense');
+        document.getElementById('titleInput').value = exp.title;
+        document.getElementById('amountInput').value = exp.amount;
+        document.getElementById('discountInput').value = exp.discount || 0;
+        document.getElementById('payerSelect').value = exp.payer;
+
+        const checkboxes = document.querySelectorAll('.participant-checkbox');
+        checkboxes.forEach(cb => {
+          cb.checked = exp.participants.includes(cb.value);
+        });
+
+        document.getElementById('saveExpenseBtn').innerText = 'อัปเดตรายการ';
+        document.getElementById('cancelEditExpenseBtn').classList.remove('hidden');
+      }
+
+      document.getElementById('formSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ยกเลิกการแก้ไข Reset ฟอร์ม
+    function cancelEdit() {
+      editingId = null;
+      document.getElementById('formHeaderTitle').innerText = '2. บันทึกข้อมูล';
+
+      // Reset Inputs
+      document.getElementById('titleInput').value = '';
+      document.getElementById('amountInput').value = '';
+      document.getElementById('discountInput').value = '';
+      document.getElementById('discTitleInput').value = '';
+      document.getElementById('discAmountInput').value = '';
+
+      // Reset Buttons
+      document.getElementById('saveExpenseBtn').innerText = 'บันทึกรายการ';
+      document.getElementById('saveDiscountBtn').innerText = 'บันทึกส่วนลดอิสระ';
+      document.getElementById('cancelEditExpenseBtn').classList.add('hidden');
+      document.getElementById('cancelEditDiscountBtn').classList.add('hidden');
+    }
+
     function deleteExpense(id) {
       expenses = expenses.filter(e => e.id !== id);
+      if (editingId === id) cancelEdit();
       renderExpenses();
       calculateSettlement();
       syncData();
@@ -429,8 +502,9 @@
               <td class="py-3 px-3"><span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-md font-bold">🎁 ส่วนลดอิสระ</span></td>
               <td class="py-3 px-3 font-bold text-emerald-600">-${exp.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
               <td class="py-3 px-3 text-xs text-slate-400">-</td>
-              <td class="py-3 px-3 text-xs">${partText} <span class="text-emerald-600 font-medium">(ลดไป ${perPerson}฿/คน)</span></td>
+              <td class="py-3 px-3 text-xs">${partText} <span class="text-emerald-600 font-medium">(ลด ${perPerson}฿/คน)</span></td>
               <td class="py-3 px-3 text-right">
+                <button onclick="editExpense(${exp.id})" class="text-blue-500 hover:text-blue-700 text-xs font-medium mr-2">แก้ไข</button>
                 <button onclick="deleteExpense(${exp.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">ลบ</button>
               </td>
             </tr>
@@ -452,6 +526,7 @@
               <td class="py-3 px-3"><span class="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded-md font-medium">${exp.payer}</span></td>
               <td class="py-3 px-3 text-xs" title="${exp.participants.join(', ')}">${partText} <span class="text-slate-400">(${perPerson}฿/คน)</span></td>
               <td class="py-3 px-3 text-right">
+                <button onclick="editExpense(${exp.id})" class="text-blue-500 hover:text-blue-700 text-xs font-medium mr-2">แก้ไข</button>
                 <button onclick="deleteExpense(${exp.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">ลบ</button>
               </td>
             </tr>
@@ -473,7 +548,6 @@
 
       expenses.forEach(exp => {
         if (exp.type === 'standalone_discount') {
-          // ส่วนลดอิสระ: สมาชิกที่ได้รับส่วนลด จะถูกบวก Balance เพิ่ม (ลดหนี้ที่ต้องจ่ายลง)
           const splitDiscount = exp.amount / exp.participants.length;
           exp.participants.forEach(p => {
             if (balances[p] !== undefined) {
@@ -481,7 +555,6 @@
             }
           });
         } else {
-          // ค่าใช้จ่ายทั่วไป
           const splitAmount = exp.netAmount / exp.participants.length;
           
           if (balances[exp.payer] !== undefined) {
