@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบหารค่าใช้จ่ายทริป (Trip Splitter)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDK สำหรับ Realtime Sync -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans p-4 md:p-8">
+  <div class="max-w-4xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <header class="text-center space-y-2">
+      <h1 class="text-3xl font-bold text-slate-900">🚗 คำนวณหารค่าใช้จ่ายทริป</h1>
+      <p class="text-slate-500 text-sm">จัดการค่าใช้จ่าย เพิ่มส่วนลดอิสระ เลือกคนหารเจาะจง และแชร์ห้องกรอกข้อมูลร่วมกันได้</p>
+    </header>
+
+    <!-- ระบบสร้าง/เข้าร่วมห้องทริป (Room Code) -->
+    <section class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-5 rounded-2xl shadow-md space-y-3">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+        <div>
+          <h2 class="font-bold text-lg">🌐 ระบบแชร์ห้องกรอกข้อมูลร่วมกัน</h2>
+          <p class="text-xs text-blue-100">ใส่ Room Code เดียวกับเพื่อน เพื่อเข้าถึงและกรอกข้อมูลพร้อมกันแบบ Real-time</p>
+        </div>
+        <div class="flex gap-2 w-full md:w-auto">
+          <input id="roomIdInput" type="text" placeholder="ระบุ Room Code (เช่น TRIP2026)" class="px-3 py-2 rounded-xl text-slate-800 text-sm focus:outline-none flex-1 md:w-56 font-mono font-bold uppercase">
+          <button onclick="joinRoom()" class="bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold px-4 py-2 rounded-xl text-sm transition">เชื่อมต่อห้อง</button>
+        </div>
+      </div>
+      <div id="roomStatus" class="text-xs bg-white/10 px-3 py-1.5 rounded-lg flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-300 animate-pulse"></span>
+        <span>สถานะ: โหมดใช้งานออฟไลน์ในเครื่อง (ยังไม่ได้เชื่อมต่อห้องออนไลน์)</span>
+      </div>
+    </section>
+
+    <!-- 1. รายชื่อสมาชิก -->
+    <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+      <h2 class="text-lg font-semibold mb-3 text-slate-800">1. รายชื่อสมาชิกในทริป</h2>
+      <div class="flex gap-2 mb-3">
+        <input id="nameInput" type="text" placeholder="ใส่ชื่อเพื่อน..." class="flex-1 px-4 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-slate-200">
+        <button onclick="addMember()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition">เพิ่มสมาชิก</button>
+      </div>
+      <div id="membersList" class="flex flex-wrap gap-2"></div>
+    </section>
+
+    <!-- 2. เพิ่มรายการค่าใช้จ่าย / ส่วนลดอิสระ -->
+    <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
+        <h2 class="text-lg font-semibold text-slate-800">2. บันทึกข้อมูล</h2>
+        
+        <!-- Tab เลือกประเภทการบันทึก -->
+        <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-medium">
+          <button id="tabExpenseBtn" onclick="switchFormMode('expense')" class="px-3 py-1.5 rounded-lg bg-white shadow-sm text-blue-600 font-bold transition">💳 ค่าใช้จ่ายทั่วไป</button>
+          <button id="tabDiscountBtn" onclick="switchFormMode('discount')" class="px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 transition">🎁 ส่วนลดอิสระ (ไม่ผูกกับบิล)</button>
+        </div>
+      </div>
+      
+      <!-- ฟอร์มค่าใช้จ่ายทั่วไป -->
+      <div id="expenseFormBlock" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div class="md:col-span-1">
+            <label class="block text-xs font-medium text-slate-500 mb-1">รายการ</label>
+            <input id="titleInput" type="text" placeholder="เช่น ค่าอาหาร, ค่าน้ำมัน" class="w-full px-4 py-2 border rounded-xl text-sm border-slate-200">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">ยอดเต็มก่อนลด (บาท)</label>
+            <input id="amountInput" type="number" placeholder="0.00" class="w-full px-4 py-2 border rounded-xl text-sm border-slate-200">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">ส่วนลดท้ายบิล (ถ้ามี)</label>
+            <input id="discountInput" type="number" placeholder="0.00" class="w-full px-4 py-2 border rounded-xl text-sm border-slate-200 text-emerald-600 font-medium">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">คนจ่ายเงินสำรองไปก่อน</label>
+            <select id="payerSelect" class="w-full px-4 py-2 border rounded-xl text-sm bg-white border-slate-200">
+              <option value="">-- ใครเป็นคนจ่าย? --</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-xs font-medium text-slate-500">คนที่มีส่วนร่วมหารรายการนี้:</label>
+            <label class="inline-flex items-center text-xs text-blue-600 cursor-pointer font-medium">
+              <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this, 'participant-checkbox')" class="mr-1 rounded text-blue-600"> เลือกทุกคน
+            </label>
+          </div>
+          <div id="participantsContainer" class="flex flex-wrap gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <p class="text-xs text-slate-400">กรุณาเพิ่มสมาชิกในข้อ 1 ก่อน</p>
+          </div>
+        </div>
+
+        <button onclick="addExpense()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-medium transition shadow-sm">บันทึกค่าใช้จ่าย</button>
+      </div>
+
+      <!-- ฟอร์มส่วนลดอิสระ -->
+      <div id="discountFormBlock" class="space-y-4 hidden">
+        <div class="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800">
+          💡 <b>ส่วนลดอิสระ:</b> สำหรับคูปองส่วนลดกลาง, แคชแบ็กบัตรเครดิต หรือส่วนลดเฉพาะบุคคล โดยระบบจะนำไปลดภาระค่าใช้จ่ายให้ผู้ที่มีสิทธิ์ได้รับส่วนลดโดยตรง
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อส่วนลด / สิทธิ์พิเศษ</label>
+            <input id="discTitleInput" type="text" placeholder="เช่น คูปอง Agoda, แคชแบ็กบัตรเครดิต, ส่วนลดนักศึกษา" class="w-full px-4 py-2 border rounded-xl text-sm border-slate-200">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">มูลค่าส่วนลด (บาท)</label>
+            <input id="discAmountInput" type="number" placeholder="0.00" class="w-full px-4 py-2 border rounded-xl text-sm border-slate-200 text-emerald-600 font-bold">
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-xs font-medium text-slate-500">คนที่มีสิทธิ์ได้รับส่วนลดนี้ (ลดเงินที่ต้องจ่ายลง):</label>
+            <label class="inline-flex items-center text-xs text-emerald-600 cursor-pointer font-medium">
+              <input type="checkbox" id="selectAllDiscCheckbox" onchange="toggleSelectAll(this, 'disc-beneficiary-checkbox')" class="mr-1 rounded text-emerald-600"> เลือกทุกคน
+            </label>
+          </div>
+          <div id="discBeneficiariesContainer" class="flex flex-wrap gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <p class="text-xs text-slate-400">กรุณาเพิ่มสมาชิกในข้อ 1 ก่อน</p>
+          </div>
+        </div>
+
+        <button onclick="addStandaloneDiscount()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-sm font-medium transition shadow-sm">บันทึกส่วนลดอิสระ</button>
+      </div>
+    </section>
+
+    <!-- 3. ตารางรายการค่าใช้จ่าย & ส่วนลด -->
+    <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-lg font-semibold text-slate-800">3. รายการที่บันทึกแล้ว</h2>
+        <span id="totalExpenseBadge" class="text-xs bg-slate-100 text-slate-600 font-medium px-2.5 py-1 rounded-full">รวมสุทธิ: 0 บาท</span>
+      </div>
+      
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-600">
+          <thead class="text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
+            <tr>
+              <th class="py-2.5 px-3">รายการ</th>
+              <th class="py-2.5 px-3">ประเภท</th>
+              <th class="py-2.5 px-3">จำนวนเงิน/ส่วนลด</th>
+              <th class="py-2.5 px-3">คนจ่าย / ผู้ให้สิทธิ์</th>
+              <th class="py-2.5 px-3">คนหาร / ผู้ได้ส่วนลด</th>
+              <th class="py-2.5 px-3 text-right">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="expensesTableBody">
+            <tr>
+              <td colspan="6" class="text-center py-4 text-slate-400 text-xs">ยังไม่มีรายการที่บันทึก</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4. สรุปผลการโอนเงิน -->
+    <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <h2 class="text-lg font-semibold text-slate-800">4. สรุปยอดเคลียร์เงิน (ใครต้องโอนให้ใคร)</h2>
+      <div id="settlementResults" class="space-y-2">
+        <p class="text-sm text-slate-400">ยังไม่มีข้อมูลเพียงพอสำหรับคำนวณ</p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      databaseURL: "https://trip-splitter-demo-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+    
+    let db = null;
+    let currentRoomId = null;
+    let members = [];
+    let expenses = []; // รองรับทั้งประเภท 'expense' และ 'standalone_discount'
+
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      db = firebase.database();
+    } catch (e) {
+      console.warn("Firebase โหมดออฟไลน์ใช้งานในเครื่อง", e);
+    }
+
+    function switchFormMode(mode) {
+      const expBlock = document.getElementById('expenseFormBlock');
+      const discBlock = document.getElementById('discountFormBlock');
+      const expBtn = document.getElementById('tabExpenseBtn');
+      const discBtn = document.getElementById('tabDiscountBtn');
+
+      if (mode === 'expense') {
+        expBlock.classList.remove('hidden');
+        discBlock.classList.add('hidden');
+        expBtn.className = "px-3 py-1.5 rounded-lg bg-white shadow-sm text-blue-600 font-bold transition";
+        discBtn.className = "px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 transition";
+      } else {
+        expBlock.classList.add('hidden');
+        discBlock.classList.remove('hidden');
+        discBtn.className = "px-3 py-1.5 rounded-lg bg-white shadow-sm text-emerald-600 font-bold transition";
+        expBtn.className = "px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 transition";
+      }
+    }
+
+    function joinRoom() {
+      const roomInput = document.getElementById('roomIdInput').value.trim().toUpperCase();
+      if (!roomInput) {
+        alert('กรุณากรอก Room Code ที่ต้องการเข้า');
+        return;
+      }
+
+      currentRoomId = roomInput;
+      const statusDiv = document.getElementById('roomStatus');
+      
+      if (db) {
+        statusDiv.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>เชื่อมต่อกับห้องออนไลน์: <b>${currentRoomId}</b> (Real-time Sync)</span>`;
+        
+        db.ref('trips/' + currentRoomId).on('value', (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            members = data.members || [];
+            expenses = data.expenses || [];
+          } else {
+            members = [];
+            expenses = [];
+          }
+          renderMembers();
+          renderExpenses();
+          calculateSettlement();
+        });
+      } else {
+        statusDiv.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-400"></span><span>ใช้งานห้องออฟไลน์: <b>${currentRoomId}</b></span>`;
+      }
+    }
+
+    function syncData() {
+      if (currentRoomId && db) {
+        db.ref('trips/' + currentRoomId).set({
+          members: members,
+          expenses: expenses
+        });
+      }
+    }
+
+    function addMember() {
+      const nameInput = document.getElementById('nameInput');
+      const name = nameInput.value.trim();
+      if (!name) return;
+      if (members.includes(name)) {
+        alert('มีชื่อนี้ในระบบแล้ว');
+        return;
+      }
+      members.push(name);
+      nameInput.value = '';
+      renderMembers();
+      syncData();
+    }
+
+    function removeMember(name) {
+      const isUsed = expenses.some(e => e.payer === name || (e.participants && e.participants.includes(name)));
+      if (isUsed) {
+        alert('ไม่สามารถลบสมาชิกนี้ได้ เนื่องจากมีรายการที่เกี่ยวข้องอยู่');
+        return;
+      }
+      members = members.filter(m => m !== name);
+      renderMembers();
+      syncData();
+    }
+
+    function renderMembers() {
+      const list = document.getElementById('membersList');
+      const select = document.getElementById('payerSelect');
+      const partContainer = document.getElementById('participantsContainer');
+      const discContainer = document.getElementById('discBeneficiariesContainer');
+
+      list.innerHTML = members.map(m => `
+        <span class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium">
+          ${m}
+          <button onclick="removeMember('${m}')" class="text-slate-400 hover:text-red-500 font-bold ml-1">&times;</button>
+        </span>
+      `).join('');
+
+      const currentPayer = select.value;
+      select.innerHTML = '<option value="">-- ใครเป็นคนจ่าย? --</option>' + 
+        members.map(m => `<option value="${m}" ${m === currentPayer ? 'selected' : ''}>${m}</option>`).join('');
+
+      if (members.length === 0) {
+        partContainer.innerHTML = '<p class="text-xs text-slate-400">กรุณาเพิ่มสมาชิกในข้อ 1 ก่อน</p>';
+        discContainer.innerHTML = '<p class="text-xs text-slate-400">กรุณาเพิ่มสมาชิกในข้อ 1 ก่อน</p>';
+      } else {
+        const selectAllExp = document.getElementById('selectAllCheckbox').checked;
+        partContainer.innerHTML = members.map(m => `
+          <label class="inline-flex items-center text-xs text-slate-700 font-medium cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+            <input type="checkbox" value="${m}" class="participant-checkbox mr-1.5 rounded text-blue-600" ${selectAllExp ? 'checked' : ''}>
+            ${m}
+          </label>
+        `).join('');
+
+        const selectAllDisc = document.getElementById('selectAllDiscCheckbox').checked;
+        discContainer.innerHTML = members.map(m => `
+          <label class="inline-flex items-center text-xs text-slate-700 font-medium cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+            <input type="checkbox" value="${m}" class="disc-beneficiary-checkbox mr-1.5 rounded text-emerald-600" ${selectAllDisc ? 'checked' : ''}>
+            ${m}
+          </label>
+        `).join('');
+      }
+    }
+
+    function toggleSelectAll(master, className) {
+      const checkboxes = document.querySelectorAll('.' + className);
+      checkboxes.forEach(cb => cb.checked = master.checked);
+    }
+
+    // เพิ่มค่าใช้จ่ายทั่วไป
+    function addExpense() {
+      const title = document.getElementById('titleInput').value.trim();
+      const amount = parseFloat(document.getElementById('amountInput').value);
+      const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+      const payer = document.getElementById('payerSelect').value;
+
+      const checkedBoxes = document.querySelectorAll('.participant-checkbox:checked');
+      const participants = Array.from(checkedBoxes).map(cb => cb.value);
+
+      if (!title || isNaN(amount) || amount <= 0 || !payer) {
+        alert('กรุณากรอกรายการ จำนวนเงิน และเลือกคนจ่ายให้ถูกต้อง');
+        return;
+      }
+
+      if (discount >= amount) {
+        alert('ส่วนลดต้องน้อยกว่ายอดเต็ม');
+        return;
+      }
+
+      if (participants.length === 0) {
+        alert('กรุณาเลือกผู้ร่วมหารอย่างน้อย 1 คน');
+        return;
+      }
+
+      expenses.push({
+        id: Date.now(),
+        type: 'expense',
+        title,
+        amount,
+        discount,
+        netAmount: amount - discount,
+        payer,
+        participants
+      });
+
+      document.getElementById('titleInput').value = '';
+      document.getElementById('amountInput').value = '';
+      document.getElementById('discountInput').value = '';
+      
+      renderExpenses();
+      calculateSettlement();
+      syncData();
+    }
+
+    // เพิ่มส่วนลดอิสระ
+    function addStandaloneDiscount() {
+      const title = document.getElementById('discTitleInput').value.trim();
+      const amount = parseFloat(document.getElementById('discAmountInput').value);
+
+      const checkedBoxes = document.querySelectorAll('.disc-beneficiary-checkbox:checked');
+      const beneficiaries = Array.from(checkedBoxes).map(cb => cb.value);
+
+      if (!title || isNaN(amount) || amount <= 0) {
+        alert('กรุณากรอกชื่อส่วนลดและจำนวนเงินส่วนลดให้ถูกต้อง');
+        return;
+      }
+
+      if (beneficiaries.length === 0) {
+        alert('กรุณาเลือกคนที่มีสิทธิ์ได้รับส่วนลดอย่างน้อย 1 คน');
+        return;
+      }
+
+      expenses.push({
+        id: Date.now(),
+        type: 'standalone_discount',
+        title,
+        amount: amount,
+        netAmount: -amount,
+        payer: 'สิทธิ์ส่วนลดกลาง',
+        participants: beneficiaries
+      });
+
+      document.getElementById('discTitleInput').value = '';
+      document.getElementById('discAmountInput').value = '';
+
+      renderExpenses();
+      calculateSettlement();
+      syncData();
+    }
+
+    function deleteExpense(id) {
+      expenses = expenses.filter(e => e.id !== id);
+      renderExpenses();
+      calculateSettlement();
+      syncData();
+    }
+
+    function renderExpenses() {
+      const tbody = document.getElementById('expensesTableBody');
+      const totalBadge = document.getElementById('totalExpenseBadge');
+
+      const totalNetSum = expenses.reduce((sum, e) => {
+        return e.type === 'standalone_discount' ? sum - e.amount : sum + e.netAmount;
+      }, 0);
+
+      totalBadge.innerText = `รวมค่าใช้จ่ายสุทธิ: ${totalNetSum.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท`;
+
+      if (expenses.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-slate-400 text-xs">ยังไม่มีรายการที่บันทึก</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = expenses.map(exp => {
+        if (exp.type === 'standalone_discount') {
+          const perPerson = (exp.amount / exp.participants.length).toFixed(2);
+          const partText = exp.participants.length === members.length && members.length > 0 
+            ? '<span class="text-emerald-600 font-medium">ทุกคน</span>' 
+            : exp.participants.join(', ');
+
+          return `
+            <tr class="border-b border-slate-100 bg-emerald-50/30">
+              <td class="py-3 px-3 font-medium text-slate-800">${exp.title}</td>
+              <td class="py-3 px-3"><span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-md font-bold">🎁 ส่วนลดอิสระ</span></td>
+              <td class="py-3 px-3 font-bold text-emerald-600">-${exp.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
+              <td class="py-3 px-3 text-xs text-slate-400">-</td>
+              <td class="py-3 px-3 text-xs">${partText} <span class="text-emerald-600 font-medium">(ลดไป ${perPerson}฿/คน)</span></td>
+              <td class="py-3 px-3 text-right">
+                <button onclick="deleteExpense(${exp.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">ลบ</button>
+              </td>
+            </tr>
+          `;
+        } else {
+          const perPerson = (exp.netAmount / exp.participants.length).toFixed(2);
+          const partText = exp.participants.length === members.length && members.length > 0 
+            ? '<span class="text-blue-600 font-medium">ทุกคน</span>' 
+            : exp.participants.join(', ');
+
+          return `
+            <tr class="border-b border-slate-100 hover:bg-slate-50/50">
+              <td class="py-3 px-3 font-medium text-slate-800">${exp.title}</td>
+              <td class="py-3 px-3"><span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-md font-medium">💳 ค่าใช้จ่าย</span></td>
+              <td class="py-3 px-3 font-bold text-slate-800">
+                ${exp.netAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
+                ${exp.discount > 0 ? `<span class="text-xs text-emerald-600 font-normal block">(ลดแล้ว ${exp.discount}฿)</span>` : ''}
+              </td>
+              <td class="py-3 px-3"><span class="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded-md font-medium">${exp.payer}</span></td>
+              <td class="py-3 px-3 text-xs" title="${exp.participants.join(', ')}">${partText} <span class="text-slate-400">(${perPerson}฿/คน)</span></td>
+              <td class="py-3 px-3 text-right">
+                <button onclick="deleteExpense(${exp.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">ลบ</button>
+              </td>
+            </tr>
+          `;
+        }
+      }).join('');
+    }
+
+    function calculateSettlement() {
+      const resDiv = document.getElementById('settlementResults');
+
+      if (members.length === 0 || expenses.length === 0) {
+        resDiv.innerHTML = '<p class="text-sm text-slate-400">ยังไม่มีข้อมูลเพียงพอสำหรับคำนวณ</p>';
+        return;
+      }
+
+      let balances = {};
+      members.forEach(m => balances[m] = 0);
+
+      expenses.forEach(exp => {
+        if (exp.type === 'standalone_discount') {
+          // ส่วนลดอิสระ: สมาชิกที่ได้รับส่วนลด จะถูกบวก Balance เพิ่ม (ลดหนี้ที่ต้องจ่ายลง)
+          const splitDiscount = exp.amount / exp.participants.length;
+          exp.participants.forEach(p => {
+            if (balances[p] !== undefined) {
+              balances[p] += splitDiscount;
+            }
+          });
+        } else {
+          // ค่าใช้จ่ายทั่วไป
+          const splitAmount = exp.netAmount / exp.participants.length;
+          
+          if (balances[exp.payer] !== undefined) {
+            balances[exp.payer] += exp.netAmount;
+          }
+
+          exp.participants.forEach(p => {
+            if (balances[p] !== undefined) {
+              balances[p] -= splitAmount;
+            }
+          });
+        }
+      });
+
+      let debtors = [];
+      let creditors = [];
+
+      for (let person in balances) {
+        const bal = balances[person];
+        if (bal < -0.01) {
+          debtors.push({ name: person, amount: -bal });
+        } else if (bal > 0.01) {
+          creditors.push({ name: person, amount: bal });
+        }
+      }
+
+      let transactions = [];
+      let i = 0, j = 0;
+
+      while (i < debtors.length && j < creditors.length) {
+        let payment = Math.min(debtors[i].amount, creditors[j].amount);
+        transactions.push({
+          from: debtors[i].name,
+          to: creditors[j].name,
+          amount: payment
+        });
+
+        debtors[i].amount -= payment;
+        creditors[j].amount -= payment;
+
+        if (debtors[i].amount < 0.01) i++;
+        if (creditors[j].amount < 0.01) j++;
+      }
+
+      if (transactions.length === 0) {
+        resDiv.innerHTML = '<p class="text-sm text-emerald-600 font-medium">✨ เคลียร์ยอดลงตัวเรียบร้อยแล้ว ไม่มียอดค้างโอน</p>';
+      } else {
+        resDiv.innerHTML = transactions.map(t => `
+          <div class="p-3.5 bg-slate-50 border border-slate-100 rounded-xl text-sm flex justify-between items-center">
+            <div>
+              <span class="font-semibold text-slate-800">${t.from}</span>
+              <span class="text-slate-400 text-xs mx-2">➔ โอนให้ ➔</span>
+              <span class="font-semibold text-blue-600">${t.to}</span>
+            </div>
+            <div class="text-emerald-600 font-bold text-base">
+              ${t.amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+  </script>
+</body>
+</html>
