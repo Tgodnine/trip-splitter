@@ -15,7 +15,7 @@
     <!-- Header -->
     <header class="text-center space-y-2">
       <h1 class="text-3xl font-bold text-slate-900">🚗 คำนวณหารค่าใช้จ่ายทริป</h1>
-      <p class="text-slate-500 text-sm">จัดการค่าใช้จ่าย แก้ไขรายการ และแชร์กรอกข้อมูลร่วมกันแบบ Real-time (บันทึกข้อมูลอัตโนมัติ)</p>
+      <p class="text-slate-500 text-sm">จัดการค่าใช้จ่าย แก้ไขรายการ แนบเลขบัญชีโอนเงิน และแชร์กรอกข้อมูลร่วมกันแบบ Real-time</p>
     </header>
 
     <!-- แถบสถานะห้อง (เชื่อมต่อให้อัตโนมัติ) -->
@@ -33,14 +33,18 @@
       </div>
     </section>
 
-    <!-- 1. รายชื่อสมาชิก -->
-    <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-      <h2 class="text-lg font-semibold mb-3 text-slate-800">1. รายชื่อสมาชิกในทริป</h2>
-      <div class="flex gap-2 mb-3">
-        <input id="nameInput" type="text" placeholder="ใส่ชื่อเพื่อน..." class="flex-1 px-4 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-slate-200">
-        <button onclick="addMember()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition">เพิ่มสมาชิก</button>
+    <!-- 1. รายชื่อสมาชิก & ข้อมูลการรับเงิน -->
+    <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <h2 class="text-lg font-semibold text-slate-800">1. รายชื่อสมาชิก & ช่องทางโอนเงิน</h2>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <input id="nameInput" type="text" placeholder="ชื่อสมาชิก *" class="px-4 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-slate-200">
+        <input id="bankNameInput" type="text" placeholder="ธนาคาร/ช่องทาง (เช่น กสิกร, พร้อมเพย์)" class="px-4 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-slate-200">
+        <input id="bankAccInput" type="text" placeholder="เลขบัญชี / เบอร์พร้อมเพย์" class="px-4 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-slate-200 font-mono">
       </div>
-      <div id="membersList" class="flex flex-wrap gap-2"></div>
+      <button onclick="addMember()" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition">เพิ่มสมาชิก</button>
+
+      <div id="membersList" class="flex flex-wrap gap-2 pt-2"></div>
     </section>
 
     <!-- 2. เพิ่ม/แก้ไข รายการค่าใช้จ่าย & ส่วนลด -->
@@ -48,7 +52,6 @@
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
         <h2 id="formHeaderTitle" class="text-lg font-semibold text-slate-800">2. บันทึกข้อมูล</h2>
         
-        <!-- Tab เลือกประเภทการบันทึก -->
         <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-medium">
           <button id="tabExpenseBtn" onclick="switchFormMode('expense')" class="px-3 py-1.5 rounded-lg bg-white shadow-sm text-blue-600 font-bold transition">💳 ค่าใช้จ่ายทั่วไป</button>
           <button id="tabDiscountBtn" onclick="switchFormMode('discount')" class="px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 transition">🎁 ส่วนลดอิสระ</button>
@@ -163,7 +166,7 @@
     <!-- 4. สรุปผลการโอนเงิน -->
     <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
       <h2 class="text-lg font-semibold text-slate-800">4. สรุปยอดเคลียร์เงิน (ใครต้องโอนให้ใคร)</h2>
-      <div id="settlementResults" class="space-y-2">
+      <div id="settlementResults" class="space-y-3">
         <p class="text-sm text-slate-400">ยังไม่มีข้อมูลเพียงพอสำหรับคำนวณ</p>
       </div>
     </section>
@@ -176,7 +179,7 @@
     
     let db = null;
     let currentRoomId = null;
-    let members = [];
+    let members = []; // โครงสร้างสมาชิก [{ name, bankName, bankAcc }]
     let expenses = [];
     let editingId = null;
 
@@ -189,7 +192,19 @@
       console.warn("Firebase offline mode", e);
     }
 
-    // ฟังก์ชันช่วยบันทึกลงเครื่อง (LocalStorage)
+    // ฟังก์ชันดึงชื่อสมาชิกรองรับรูปแบบข้อมูลเก่า
+    function getMemberName(m) {
+      return typeof m === 'object' ? m.name : m;
+    }
+
+    function getMemberDetails(name) {
+      const m = members.find(x => getMemberName(x) === name);
+      if (typeof m === 'object') {
+        return { bankName: m.bankName || '', bankAcc: m.bankAcc || '' };
+      }
+      return { bankName: '', bankAcc: '' };
+    }
+
     function saveLocal() {
       try {
         if (!currentRoomId) return;
@@ -197,7 +212,6 @@
       } catch (e) { console.error(e); }
     }
 
-    // ฟังก์ชันช่วยโหลดจากเครื่อง (LocalStorage)
     function loadLocal() {
       try {
         if (!currentRoomId) return false;
@@ -229,13 +243,11 @@
       currentRoomId = roomId;
       document.getElementById('currentRoomText').innerText = currentRoomId;
       
-      // 1. โหลดข้อมูลจากเครื่องก่อนทันที ป้องกันหน้าโล่งเมื่อกดรีเฟรช
       loadLocal();
       renderMembers();
       renderExpenses();
       calculateSettlement();
 
-      // 2. ดึง/ซิงค์ข้อมูลจากออนไลน์เพิ่มเติม
       if (db) {
         db.ref('trips/' + currentRoomId).on('value', (snapshot) => {
           const data = snapshot.val();
@@ -252,7 +264,7 @@
     }
 
     function syncData() {
-      saveLocal(); // บันทึกลง LocalStorage ทุกครั้งที่มีการเปลี่ยนแปลง
+      saveLocal();
       if (currentRoomId && db) {
         db.ref('trips/' + currentRoomId).set({
           members: members,
@@ -282,14 +294,29 @@
 
     function addMember() {
       const nameInput = document.getElementById('nameInput');
+      const bankNameInput = document.getElementById('bankNameInput');
+      const bankAccInput = document.getElementById('bankAccInput');
+
       const name = nameInput.value.trim();
-      if (!name) return;
-      if (members.includes(name)) {
+      const bankName = bankNameInput.value.trim();
+      const bankAcc = bankAccInput.value.trim();
+
+      if (!name) {
+        alert('กรุณากรอกชื่อสมาชิก');
+        return;
+      }
+
+      if (members.some(m => getMemberName(m) === name)) {
         alert('มีชื่อนี้ในระบบแล้ว');
         return;
       }
-      members.push(name);
+
+      members.push({ name, bankName, bankAcc });
+
       nameInput.value = '';
+      bankNameInput.value = '';
+      bankAccInput.value = '';
+
       renderMembers();
       syncData();
     }
@@ -300,7 +327,7 @@
         alert('ไม่สามารถลบสมาชิกนี้ได้ เนื่องจากมีรายการที่เกี่ยวข้องอยู่');
         return;
       }
-      members = members.filter(m => m !== name);
+      members = members.filter(m => getMemberName(m) !== name);
       renderMembers();
       syncData();
     }
@@ -311,36 +338,49 @@
       const partContainer = document.getElementById('participantsContainer');
       const discContainer = document.getElementById('discBeneficiariesContainer');
 
-      list.innerHTML = members.map(m => `
-        <span class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium">
-          ${m}
-          <button onclick="removeMember('${m}')" class="text-slate-400 hover:text-red-500 font-bold ml-1">&times;</button>
-        </span>
-      `).join('');
+      list.innerHTML = members.map(m => {
+        const name = getMemberName(m);
+        const bankInfo = typeof m === 'object' && m.bankAcc ? `${m.bankName ? m.bankName + ': ' : ''}${m.bankAcc}` : '';
+        return `
+          <div class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-200">
+            <span><b>${name}</b> ${bankInfo ? `<span class="text-slate-500 font-mono text-[11px]">(${bankInfo})</span>` : ''}</span>
+            <button onclick="removeMember('${name}')" class="text-slate-400 hover:text-red-500 font-bold ml-1">&times;</button>
+          </div>
+        `;
+      }).join('');
 
       const currentPayer = select.value;
       select.innerHTML = '<option value="">-- ใครเป็นคนจ่าย? --</option>' + 
-        members.map(m => `<option value="${m}" ${m === currentPayer ? 'selected' : ''}>${m}</option>`).join('');
+        members.map(m => {
+          const name = getMemberName(m);
+          return `<option value="${name}" ${name === currentPayer ? 'selected' : ''}>${name}</option>`;
+        }).join('');
 
       if (members.length === 0) {
         partContainer.innerHTML = '<p class="text-xs text-slate-400">กรุณาเพิ่มสมาชิกในข้อ 1 ก่อน</p>';
         discContainer.innerHTML = '<p class="text-xs text-slate-400">กรุณาเพิ่มสมาชิกในข้อ 1 ก่อน</p>';
       } else {
         const selectAllExp = document.getElementById('selectAllCheckbox').checked;
-        partContainer.innerHTML = members.map(m => `
-          <label class="inline-flex items-center text-xs text-slate-700 font-medium cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm">
-            <input type="checkbox" value="${m}" class="participant-checkbox mr-1.5 rounded text-blue-600" ${selectAllExp ? 'checked' : ''}>
-            ${m}
-          </label>
-        `).join('');
+        partContainer.innerHTML = members.map(m => {
+          const name = getMemberName(m);
+          return `
+            <label class="inline-flex items-center text-xs text-slate-700 font-medium cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+              <input type="checkbox" value="${name}" class="participant-checkbox mr-1.5 rounded text-blue-600" ${selectAllExp ? 'checked' : ''}>
+              ${name}
+            </label>
+          `;
+        }).join('');
 
         const selectAllDisc = document.getElementById('selectAllDiscCheckbox').checked;
-        discContainer.innerHTML = members.map(m => `
-          <label class="inline-flex items-center text-xs text-slate-700 font-medium cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm">
-            <input type="checkbox" value="${m}" class="disc-beneficiary-checkbox mr-1.5 rounded text-emerald-600" ${selectAllDisc ? 'checked' : ''}>
-            ${m}
-          </label>
-        `).join('');
+        discContainer.innerHTML = members.map(m => {
+          const name = getMemberName(m);
+          return `
+            <label class="inline-flex items-center text-xs text-slate-700 font-medium cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+              <input type="checkbox" value="${name}" class="disc-beneficiary-checkbox mr-1.5 rounded text-emerald-600" ${selectAllDisc ? 'checked' : ''}>
+              ${name}
+            </label>
+          `;
+        }).join('');
       }
     }
 
@@ -557,87 +597,7 @@
       }).join('');
     }
 
-    function calculateSettlement() {
-      const resDiv = document.getElementById('settlementResults');
-
-      if (members.length === 0 || expenses.length === 0) {
-        resDiv.innerHTML = '<p class="text-sm text-slate-400">ยังไม่มีข้อมูลเพียงพอสำหรับคำนวณ</p>';
-        return;
-      }
-
-      let balances = {};
-      members.forEach(m => balances[m] = 0);
-
-      expenses.forEach(exp => {
-        if (exp.type === 'standalone_discount') {
-          const splitDiscount = exp.amount / exp.participants.length;
-          exp.participants.forEach(p => {
-            if (balances[p] !== undefined) {
-              balances[p] += splitDiscount;
-            }
-          });
-        } else {
-          const splitAmount = exp.netAmount / exp.participants.length;
-          
-          if (balances[exp.payer] !== undefined) {
-            balances[exp.payer] += exp.netAmount;
-          }
-
-          exp.participants.forEach(p => {
-            if (balances[p] !== undefined) {
-              balances[p] -= splitAmount;
-            }
-          });
-        }
-      });
-
-      let debtors = [];
-      let creditors = [];
-
-      for (let person in balances) {
-        const bal = balances[person];
-        if (bal < -0.01) {
-          debtors.push({ name: person, amount: -bal });
-        } else if (bal > 0.01) {
-          creditors.push({ name: person, amount: bal });
-        }
-      }
-
-      let transactions = [];
-      let i = 0, j = 0;
-
-      while (i < debtors.length && j < creditors.length) {
-        let payment = Math.min(debtors[i].amount, creditors[j].amount);
-        transactions.push({
-          from: debtors[i].name,
-          to: creditors[j].name,
-          amount: payment
-        });
-
-        debtors[i].amount -= payment;
-        creditors[j].amount -= payment;
-
-        if (debtors[i].amount < 0.01) i++;
-        if (creditors[j].amount < 0.01) j++;
-      }
-
-      if (transactions.length === 0) {
-        resDiv.innerHTML = '<p class="text-sm text-emerald-600 font-medium">✨ เคลียร์ยอดลงตัวเรียบร้อยแล้ว ไม่มียอดค้างโอน</p>';
-      } else {
-        resDiv.innerHTML = transactions.map(t => `
-          <div class="p-3.5 bg-slate-50 border border-slate-100 rounded-xl text-sm flex justify-between items-center">
-            <div>
-              <span class="font-semibold text-slate-800">${t.from}</span>
-              <span class="text-slate-400 text-xs mx-2">➔ โอนให้ ➔</span>
-              <span class="font-semibold text-blue-600">${t.to}</span>
-            </div>
-            <div class="text-emerald-600 font-bold text-base">
-              ${t.amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท
-            </div>
-          </div>
-        `).join('');
-      }
-    }
-  </script>
-</body>
-</html>
+    // ฟังก์ชันคัดลอกข้อความ
+    function copyText(text, btnElement) {
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(()
