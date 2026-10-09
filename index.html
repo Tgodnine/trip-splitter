@@ -15,7 +15,7 @@
     <!-- Header -->
     <header class="text-center space-y-2">
       <h1 class="text-3xl font-bold text-slate-900">🚗 คำนวณหารค่าใช้จ่ายทริป</h1>
-      <p class="text-slate-500 text-sm">จัดการค่าใช้จ่าย แก้ไขรายการ แนบเลขบัญชีโอนเงิน และแชร์กรอกข้อมูลร่วมกันแบบ Real-time</p>
+      <p class="text-slate-500 text-sm">จัดการค่าใช้จ่าย แก้ไขสมาชิก/เลขบัญชี และแชร์กรอกข้อมูลร่วมกันแบบ Real-time</p>
     </header>
 
     <!-- แถบสถานะห้อง (เชื่อมต่อให้อัตโนมัติ) -->
@@ -35,16 +35,20 @@
 
     <!-- 1. รายชื่อสมาชิก & ข้อมูลการรับเงิน -->
     <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-      <h2 class="text-lg font-semibold text-slate-800">1. รายชื่อสมาชิก & ช่องทางโอนเงิน</h2>
+      <h2 id="memberFormTitle" class="text-lg font-semibold text-slate-800">1. รายชื่อสมาชิก & ช่องทางโอนเงิน</h2>
       
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <input id="nameInput" type="text" placeholder="ชื่อสมาชิก *" class="px-4 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-slate-200">
         <input id="bankNameInput" type="text" placeholder="ธนาคาร/ช่องทาง (เช่น กสิกร, พร้อมเพย์)" class="px-4 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-slate-200">
         <input id="bankAccInput" type="text" placeholder="เลขบัญชี / เบอร์พร้อมเพย์" class="px-4 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-slate-200 font-mono">
       </div>
-      <button onclick="addMember()" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition">เพิ่มสมาชิก</button>
+      
+      <div class="flex gap-2">
+        <button id="saveMemberBtn" onclick="saveMember()" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition">เพิ่มสมาชิก</button>
+        <button id="cancelEditMemberBtn" onclick="cancelEditMember()" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition">ยกเลิกแก้ไข</button>
+      </div>
 
-      <div id="membersList" class="flex flex-wrap gap-2 pt-2"></div>
+      <div id="membersList" class="flex flex-wrap gap-2.5 pt-2"></div>
     </section>
 
     <!-- 2. เพิ่ม/แก้ไข รายการค่าใช้จ่าย & ส่วนลด -->
@@ -105,7 +109,7 @@
           💡 <b>ส่วนลดอิสระ:</b> ใช้สำหรับคูปองกลาง หรือส่วนลดเฉพาะบุคคล โดยระบบจะนำไปลดภาระค่าใช้จ่ายให้คนที่ได้รับส่วนลดโดยตรง
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อส่วนลด / สิทธิ์พิเศษ</label>
             <input id="discTitleInput" type="text" placeholder="เช่น คูปอง Agoda, แคชแบ็ก, ส่วนลดนักศึกษา" class="w-full px-4 py-2 border rounded-xl text-sm border-slate-200">
@@ -113,6 +117,12 @@
           <div>
             <label class="block text-xs font-medium text-slate-500 mb-1">มูลค่าส่วนลด (บาท)</label>
             <input id="discAmountInput" type="number" placeholder="0.00" class="w-full px-4 py-2 border rounded-xl text-sm border-slate-200 text-emerald-600 font-bold">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">เจ้าของส่วนลด / ผู้ให้สิทธิ์</label>
+            <select id="discOwnerSelect" class="w-full px-4 py-2 border rounded-xl text-sm bg-white border-slate-200">
+              <option value="ส่วนลดกลาง">-- ส่วนลดกลาง / คูปองกลาง --</option>
+            </select>
           </div>
         </div>
 
@@ -149,7 +159,7 @@
               <th class="py-2.5 px-3">รายการ</th>
               <th class="py-2.5 px-3">ประเภท</th>
               <th class="py-2.5 px-3">จำนวนเงิน/ส่วนลด</th>
-              <th class="py-2.5 px-3">คนจ่าย</th>
+              <th class="py-2.5 px-3">คนจ่าย / ผู้ให้สิทธิ์</th>
               <th class="py-2.5 px-3">คนหาร / ผู้ได้ส่วนลด</th>
               <th class="py-2.5 px-3 text-right">จัดการ</th>
             </tr>
@@ -179,20 +189,22 @@
     
     let db = null;
     let currentRoomId = null;
-    let members = []; // โครงสร้างสมาชิก [{ name, bankName, bankAcc }]
+    let members = [];
     let expenses = [];
     let editingId = null;
+    let editingMemberName = null;
 
     try {
-      if (!firebase.apps.length) {
+      if (typeof firebase !== 'undefined' && !firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+      } else if (typeof firebase !== 'undefined') {
+        db = firebase.database();
       }
-      db = firebase.database();
     } catch (e) {
       console.warn("Firebase offline mode", e);
     }
 
-    // ฟังก์ชันดึงชื่อสมาชิกรองรับรูปแบบข้อมูลเก่า
     function getMemberName(m) {
       return typeof m === 'object' ? m.name : m;
     }
@@ -249,27 +261,35 @@
       calculateSettlement();
 
       if (db) {
-        db.ref('trips/' + currentRoomId).on('value', (snapshot) => {
-          const data = snapshot.val();
-          if (data && (data.members || data.expenses)) {
-            members = data.members || [];
-            expenses = data.expenses || [];
-            saveLocal();
-            renderMembers();
-            renderExpenses();
-            calculateSettlement();
-          }
-        });
+        try {
+          db.ref('trips/' + currentRoomId).on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data && (data.members || data.expenses)) {
+              members = data.members || [];
+              expenses = data.expenses || [];
+              saveLocal();
+              renderMembers();
+              renderExpenses();
+              calculateSettlement();
+            }
+          }, (err) => {
+            console.warn("Firebase sync error:", err);
+          });
+        } catch(e) {
+          console.warn("Firebase execution error:", e);
+        }
       }
     }
 
     function syncData() {
       saveLocal();
       if (currentRoomId && db) {
-        db.ref('trips/' + currentRoomId).set({
-          members: members,
-          expenses: expenses
-        });
+        try {
+          db.ref('trips/' + currentRoomId).set({
+            members: members,
+            expenses: expenses
+          });
+        } catch(e) { console.warn(e); }
       }
     }
 
@@ -292,7 +312,7 @@
       }
     }
 
-    function addMember() {
+    function saveMember() {
       const nameInput = document.getElementById('nameInput');
       const bankNameInput = document.getElementById('bankNameInput');
       const bankAccInput = document.getElementById('bankAccInput');
@@ -306,19 +326,68 @@
         return;
       }
 
-      if (members.some(m => getMemberName(m) === name)) {
-        alert('มีชื่อนี้ในระบบแล้ว');
-        return;
+      if (editingMemberName) {
+        if (name !== editingMemberName && members.some(m => getMemberName(m) === name)) {
+          alert('มีชื่อนี้ในระบบแล้ว');
+          return;
+        }
+
+        const idx = members.findIndex(m => getMemberName(m) === editingMemberName);
+        if (idx !== -1) {
+          members[idx] = { name, bankName, bankAcc };
+        }
+
+        if (name !== editingMemberName) {
+          expenses.forEach(e => {
+            if (e.payer === editingMemberName) {
+              e.payer = name;
+            }
+            if (e.participants) {
+              e.participants = e.participants.map(p => p === editingMemberName ? name : p);
+            }
+          });
+        }
+
+        cancelEditMember();
+      } else {
+        if (members.some(m => getMemberName(m) === name)) {
+          alert('มีชื่อนี้ในระบบแล้ว');
+          return;
+        }
+
+        members.push({ name, bankName, bankAcc });
+        nameInput.value = '';
+        bankNameInput.value = '';
+        bankAccInput.value = '';
       }
 
-      members.push({ name, bankName, bankAcc });
-
-      nameInput.value = '';
-      bankNameInput.value = '';
-      bankAccInput.value = '';
-
       renderMembers();
+      renderExpenses();
+      calculateSettlement();
       syncData();
+    }
+
+    function editMember(name) {
+      const m = members.find(x => getMemberName(x) === name);
+      if (!m) return;
+
+      editingMemberName = name;
+      document.getElementById('nameInput').value = name;
+      document.getElementById('bankNameInput').value = typeof m === 'object' ? (m.bankName || '') : '';
+      document.getElementById('bankAccInput').value = typeof m === 'object' ? (m.bankAcc || '') : '';
+
+      document.getElementById('saveMemberBtn').innerText = 'อัปเดตสมาชิก';
+      document.getElementById('cancelEditMemberBtn').classList.remove('hidden');
+    }
+
+    function cancelEditMember() {
+      editingMemberName = null;
+      document.getElementById('nameInput').value = '';
+      document.getElementById('bankNameInput').value = '';
+      document.getElementById('bankAccInput').value = '';
+
+      document.getElementById('saveMemberBtn').innerText = 'เพิ่มสมาชิก';
+      document.getElementById('cancelEditMemberBtn').classList.add('hidden');
     }
 
     function removeMember(name) {
@@ -327,7 +396,13 @@
         alert('ไม่สามารถลบสมาชิกนี้ได้ เนื่องจากมีรายการที่เกี่ยวข้องอยู่');
         return;
       }
+
+      if (!confirm(`คุณต้องการลบสมาชิก "${name}" ใช่หรือไม่?`)) {
+        return;
+      }
+
       members = members.filter(m => getMemberName(m) !== name);
+      if (editingMemberName === name) cancelEditMember();
       renderMembers();
       syncData();
     }
@@ -335,6 +410,7 @@
     function renderMembers() {
       const list = document.getElementById('membersList');
       const select = document.getElementById('payerSelect');
+      const discOwnerSelect = document.getElementById('discOwnerSelect');
       const partContainer = document.getElementById('participantsContainer');
       const discContainer = document.getElementById('discBeneficiariesContainer');
 
@@ -342,19 +418,37 @@
         const name = getMemberName(m);
         const bankInfo = typeof m === 'object' && m.bankAcc ? `${m.bankName ? m.bankName + ': ' : ''}${m.bankAcc}` : '';
         return `
-          <div class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-200">
+          <div class="inline-flex items-center gap-2 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-200 shadow-sm">
             <span><b>${name}</b> ${bankInfo ? `<span class="text-slate-500 font-mono text-[11px]">(${bankInfo})</span>` : ''}</span>
-            <button onclick="removeMember('${name}')" class="text-slate-400 hover:text-red-500 font-bold ml-1">&times;</button>
+            <div class="flex items-center gap-1 border-l border-slate-300 pl-2 ml-1">
+              <button onclick="editMember('${name}')" class="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md font-medium text-[11px] transition">
+                แก้ไข
+              </button>
+              <button onclick="removeMember('${name}')" class="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-md font-medium text-[11px] transition">
+                ลบ
+              </button>
+            </div>
           </div>
         `;
       }).join('');
 
+      // Dropdown คนจ่ายเงิน
       const currentPayer = select.value;
       select.innerHTML = '<option value="">-- ใครเป็นคนจ่าย? --</option>' + 
         members.map(m => {
           const name = getMemberName(m);
           return `<option value="${name}" ${name === currentPayer ? 'selected' : ''}>${name}</option>`;
         }).join('');
+
+      // Dropdown เจ้าของส่วนลด
+      if (discOwnerSelect) {
+        const currentOwner = discOwnerSelect.value;
+        discOwnerSelect.innerHTML = '<option value="ส่วนลดกลาง">-- ส่วนลดกลาง / คูปองกลาง --</option>' + 
+          members.map(m => {
+            const name = getMemberName(m);
+            return `<option value="${name}" ${name === currentOwner ? 'selected' : ''}>${name}</option>`;
+          }).join('');
+      }
 
       if (members.length === 0) {
         partContainer.innerHTML = '<p class="text-xs text-slate-400">กรุณาเพิ่มสมาชิกในข้อ 1 ก่อน</p>';
@@ -438,6 +532,7 @@
     function saveStandaloneDiscount() {
       const title = document.getElementById('discTitleInput').value.trim();
       const amount = parseFloat(document.getElementById('discAmountInput').value);
+      const owner = document.getElementById('discOwnerSelect').value || 'ส่วนลดกลาง';
 
       const checkedBoxes = document.querySelectorAll('.disc-beneficiary-checkbox:checked');
       const beneficiaries = Array.from(checkedBoxes).map(cb => cb.value);
@@ -457,7 +552,7 @@
         title,
         amount: amount,
         netAmount: -amount,
-        payer: 'ส่วนลดกลาง',
+        payer: owner,
         participants: beneficiaries
       };
 
@@ -485,6 +580,9 @@
         switchFormMode('discount');
         document.getElementById('discTitleInput').value = exp.title;
         document.getElementById('discAmountInput').value = exp.amount;
+        if (document.getElementById('discOwnerSelect')) {
+          document.getElementById('discOwnerSelect').value = exp.payer || 'ส่วนลดกลาง';
+        }
 
         const checkboxes = document.querySelectorAll('.disc-beneficiary-checkbox');
         checkboxes.forEach(cb => {
@@ -521,6 +619,9 @@
       document.getElementById('discountInput').value = '';
       document.getElementById('discTitleInput').value = '';
       document.getElementById('discAmountInput').value = '';
+      if (document.getElementById('discOwnerSelect')) {
+        document.getElementById('discOwnerSelect').value = 'ส่วนลดกลาง';
+      }
 
       document.getElementById('saveExpenseBtn').innerText = 'บันทึกรายการ';
       document.getElementById('saveDiscountBtn').innerText = 'บันทึกส่วนลดอิสระ';
@@ -558,12 +659,14 @@
             ? '<span class="text-emerald-600 font-medium">ทุกคน</span>' 
             : exp.participants.join(', ');
 
+          const ownerText = exp.payer && exp.payer !== '-' ? exp.payer : 'ส่วนลดกลาง';
+
           return `
             <tr class="border-b border-slate-100 bg-emerald-50/30">
               <td class="py-3 px-3 font-medium text-slate-800">${exp.title}</td>
               <td class="py-3 px-3"><span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-md font-bold">🎁 ส่วนลดอิสระ</span></td>
               <td class="py-3 px-3 font-bold text-emerald-600">-${exp.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
-              <td class="py-3 px-3 text-xs text-slate-400">-</td>
+              <td class="py-3 px-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-md font-medium">${ownerText}</span></td>
               <td class="py-3 px-3 text-xs">${partText} <span class="text-emerald-600 font-medium">(ลด ${perPerson}฿/คน)</span></td>
               <td class="py-3 px-3 text-right">
                 <button onclick="editExpense(${exp.id})" class="text-blue-500 hover:text-blue-700 text-xs font-medium mr-2">แก้ไข</button>
@@ -597,7 +700,121 @@
       }).join('');
     }
 
-    // ฟังก์ชันคัดลอกข้อความ
     function copyText(text, btnElement) {
       if (!text) return;
-      navigator.clipboard.writeText(text).then(()
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = btnElement.innerText;
+        btnElement.innerText = '✓ คัดลอกแล้ว';
+        btnElement.classList.replace('bg-slate-200', 'bg-emerald-500');
+        btnElement.classList.replace('text-slate-700', 'text-white');
+        setTimeout(() => {
+          btnElement.innerText = originalText;
+          btnElement.classList.replace('bg-emerald-500', 'bg-slate-200');
+          btnElement.classList.replace('text-white', 'text-slate-700');
+        }, 1500);
+      });
+    }
+
+    function calculateSettlement() {
+      const resDiv = document.getElementById('settlementResults');
+
+      if (members.length === 0 || expenses.length === 0) {
+        resDiv.innerHTML = '<p class="text-sm text-slate-400">ยังไม่มีข้อมูลเพียงพอสำหรับคำนวณ</p>';
+        return;
+      }
+
+      let balances = {};
+      members.forEach(m => balances[getMemberName(m)] = 0);
+
+      expenses.forEach(exp => {
+        if (exp.type === 'standalone_discount') {
+          const splitDiscount = exp.amount / exp.participants.length;
+          exp.participants.forEach(p => {
+            if (balances[p] !== undefined) {
+              balances[p] += splitDiscount;
+            }
+          });
+        } else {
+          const splitAmount = exp.netAmount / exp.participants.length;
+          
+          if (balances[exp.payer] !== undefined) {
+            balances[exp.payer] += exp.netAmount;
+          }
+
+          exp.participants.forEach(p => {
+            if (balances[p] !== undefined) {
+              balances[p] -= splitAmount;
+            }
+          });
+        }
+      });
+
+      let debtors = [];
+      let creditors = [];
+
+      for (let person in balances) {
+        const bal = balances[person];
+        if (bal < -0.01) {
+          debtors.push({ name: person, amount: -bal });
+        } else if (bal > 0.01) {
+          creditors.push({ name: person, amount: bal });
+        }
+      }
+
+      let transactions = [];
+      let i = 0, j = 0;
+
+      while (i < debtors.length && j < creditors.length) {
+        let payment = Math.min(debtors[i].amount, creditors[j].amount);
+        transactions.push({
+          from: debtors[i].name,
+          to: creditors[j].name,
+          amount: payment
+        });
+
+        debtors[i].amount -= payment;
+        creditors[j].amount -= payment;
+
+        if (debtors[i].amount < 0.01) i++;
+        if (creditors[j].amount < 0.01) j++;
+      }
+
+      if (transactions.length === 0) {
+        resDiv.innerHTML = '<p class="text-sm text-emerald-600 font-medium">✨ เคลียร์ยอดลงตัวเรียบร้อยแล้ว ไม่มียอดค้างโอน</p>';
+      } else {
+        resDiv.innerHTML = transactions.map(t => {
+          const receiverDetails = getMemberDetails(t.to);
+          const hasBankInfo = Boolean(receiverDetails.bankAcc);
+
+          return `
+            <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+              <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-1">
+                <div>
+                  <span class="font-semibold text-slate-800">${t.from}</span>
+                  <span class="text-slate-400 text-xs mx-2">➔ โอนให้ ➔</span>
+                  <span class="font-semibold text-blue-600">${t.to}</span>
+                </div>
+                <div class="text-emerald-600 font-bold text-base">
+                  ${t.amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท
+                </div>
+              </div>
+
+              ${hasBankInfo ? `
+                <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs">
+                  <div class="font-mono text-slate-700">
+                    ${receiverDetails.bankName ? `<span class="font-sans font-medium text-slate-500 mr-1">${receiverDetails.bankName}:</span>` : ''}
+                    <span class="font-bold text-slate-800">${receiverDetails.bankAcc}</span>
+                  </div>
+                  <button onclick="copyText('${receiverDetails.bankAcc}', this)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded-lg font-medium transition text-xs">
+                    📋 คัดลอกเลขบัญชี
+                  </button>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
+      }
+    }
+  </script>
+</body>
+</html>
